@@ -1,7 +1,6 @@
 ﻿#include <memory>
 #include <iostream>
 
-
 class Mass {
 public:
 	enum status {
@@ -51,7 +50,8 @@ public:
 AI* AI::createAi(type type)
 {
 	switch (type) {
-		// case TYPE_ORDERED:
+	case TYPE_ORDERED:
+		return new AI_ordered();
 	default:
 		return new AI_ordered();
 		break;
@@ -59,6 +59,16 @@ AI* AI::createAi(type type)
 
 	return nullptr;
 }
+
+class AI_alpha_beta :public AI {
+private:
+	int evaluate(int alpha, int beta, Board& b, Mass::status current, int& best_x, int& best_y);
+public:
+	AI_alpha_beta(){}
+	~AI_alpha_beta(){}
+
+	bool think(Board &b);
+};
 
 class Board
 {
@@ -71,7 +81,7 @@ public:
 		ENEMY,
 		DRAW,
 	};
-private:
+//private:
 	enum {
 		BOARD_SIZE = 3,
 	};
@@ -193,8 +203,6 @@ bool AI_ordered::think(Board& b)
 	return false;
 }
 
-
-
 class Game
 {
 private:
@@ -234,9 +242,6 @@ public:
 	}
 };
 
-
-
-
 void show_start_message()
 {
 	std::cout << "========================" << std::endl;
@@ -259,6 +264,53 @@ void show_end_message(Board::WINNER winner)
 		std::cout << "Draw" << std::endl;
 	}
 	std::cout << std::endl;
+}
+
+int AI_alpha_beta::evaluate(int alpha, int beta, Board& b, Mass::status current, int& best_x, int& best_y)
+{
+	Mass::status next = (current == Mass::ENEMY) ? Mass::PLAYER : Mass::ENEMY;
+	//死活判定
+	int r = b.calc_result();
+	if (r == current) return +10000; //呼び出し側の勝ち
+	if (r == next) return -10000; //呼び出し側の負け
+	if (r == Board::DRAW) return 0; //引き分け
+
+	int score_max = -9999; //打たないで投了
+
+	for (int y = 0; y < Board::BOARD_SIZE; y++)
+		for (int x = 0; x < Board::BOARD_SIZE; x++)
+		{
+			Mass& m = b.mass_[y][x];
+			if (m.getStatus() != Mass::BLANK) continue;
+
+			m.setStatus(current); //次の手を打つ
+			int dummy;
+			int score = -evaluate(-beta, -alpha, b, next, dummy, dummy);
+			m.setStatus(Mass::BLANK); //手を戻す
+
+			if (beta < score)
+			{
+				return (score_max < score) ? score : score_max; //最悪の値より悪い
+			}
+			if (score_max < score)
+			{
+				score_max = score;
+				alpha = (alpha < score_max) ? score_max : alpha; //α値を更新
+				best_x = x;
+				best_y = y;
+			}
+		}
+	return score_max;
+}
+
+bool AI_alpha_beta::think(Board& b)
+{
+	int best_x, best_y;
+
+	if (evaluate(-10000, 10000, b, Mass::ENEMY, best_x, best_y) <= -9999)
+		return false; //打てる手なし
+
+	return b.mass_[best_y][best_x].put(Mass::ENEMY);
 }
 
 int main()
